@@ -1,2 +1,0 @@
-LeaguePath - set it to your installation folder of league, dont add / at the end (ex. C:/Riot Games/League Of Legends)
-InfoType - set it to your prefered information type, winrate / common (ex. winrate)
