@@ -15,16 +15,27 @@ import (
 
 type S struct {
 	Path     string `json:"LeaguePath"`
-	Infotype string `json:"infotype"`
+	Infotype string `json:"InfoType"`
 }
 
 var Settings S
 var Localhost string
 var Auth string
 
+const VERSION string = "2.1"
+
 func main() {
-	// get latest data
-	patch, champ_id_map, spells_id_map, items_id_map := getData()
+	// get latest data and version
+	patch, champ_id_map, spells_id_map, items_id_map, github_version := getData()
+
+	// check if update is available
+	if github_version != VERSION {
+		fmt.Println("=============================================")
+		fmt.Println("New version is available, update here:")
+		fmt.Println("https://github.com/sevnnn/SimplyRunes")
+		fmt.Println("=============================================")
+		fmt.Println("")
+	}
 
 	// im bad @ programming
 	showBuild := false
@@ -168,7 +179,7 @@ func inGame() bool {
 	}
 }
 
-func getData() (string, map[string]string, map[string]string, map[string]string) {
+func getData() (string, map[string]string, map[string]string, map[string]string, string) {
 	var patchlist []string
 	data, _ := Get("https://ddragon.leagueoflegends.com/api/versions.json")
 	json.Unmarshal(data, &patchlist)
@@ -201,7 +212,9 @@ func getData() (string, map[string]string, map[string]string, map[string]string)
 		item_id_map[i] = e.Name
 	}
 
-	return patchlist[0], champ_id_map, spell_id_map, item_id_map
+	data, _ = Get("https://raw.githubusercontent.com/sevnnn/SimplyRunes/main/version")
+
+	return patchlist[0], champ_id_map, spell_id_map, item_id_map, string(data)
 }
 
 func getQType() string {
