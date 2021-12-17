@@ -22,7 +22,7 @@ var Settings S
 var Localhost string
 var Auth string
 
-const VERSION string = "2.1"
+const VERSION string = "2.2"
 
 func main() {
 	// get latest data and version
@@ -229,8 +229,25 @@ func getQType() string {
 }
 
 func getInfo(champ string, patch string, qtype string) (int, int, []int, string, []string, []int, []int) {
+	// this api might crash upon new patches, so if it 404's then use older patches
+	var data []byte
+	spatch := strings.Split(patch, ".")
+	for {
+		spatchj := strings.Join(spatch, ".")
+		datas, sc := Get("https://league-champion-aggregate.iesdev.com/api/champions/" + champ + "?patch=" + spatchj + "&queue=" + qtype + "&region=world&tier=PLATINUM_PLUS")
+		if sc == 200 {
+			data = datas
+			break
+		}
+		spatch = strings.Split(spatchj, ".")
+		val, err := strconv.Atoi(spatch[1])
+		Check(err)
+		val--
+		spatch[1] = strconv.Itoa(val)
+	}
+
+	// unmarshal data into struct
 	var apidata APIData
-	data, _ := Get("https://league-champion-aggregate.iesdev.com/api/champions/" + champ + "?patch=" + patch + "&queue=" + qtype + "&region=world&tier=PLATINUM_PLUS")
 	json.Unmarshal(data, &apidata)
 
 	r := 0

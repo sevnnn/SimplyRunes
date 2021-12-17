@@ -24,6 +24,7 @@ type Gameflow struct {
 type APIData struct {
 	Data []struct {
 		Role  string `json:"role"`
+		Patch string `json:"patch"`
 		Stats struct {
 			WR_Shards struct {
 				Build []int `json:"build"`
