@@ -65,8 +65,6 @@ func main() {
 
 		// showing build
 		if inGame() && showBuild {
-			fmt.Println("showing build")
-
 			// show this only one time
 			showBuild = false
 
