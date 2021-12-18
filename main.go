@@ -22,7 +22,7 @@ var Settings S
 var Localhost string
 var Auth string
 
-const VERSION string = "2.2"
+const VERSION string = "2.3"
 
 func main() {
 	// get latest data and version
@@ -63,6 +63,30 @@ func main() {
 
 	for leagueOpened() {
 
+		// showing build
+		if inGame() && showBuild {
+			fmt.Println("showing build")
+
+			// show this only one time
+			showBuild = false
+
+			// convert []int to []string that can be joined
+			var realstarting_items []string
+			for _, e := range starting_items {
+				realstarting_items = append(realstarting_items, items_id_map[strconv.Itoa(e)])
+			}
+			var realbuild []string
+			for _, e := range build {
+				realbuild = append(realbuild, items_id_map[strconv.Itoa(e)])
+			}
+
+			// print out build and starting items
+			fmt.Println("Starting items:")
+			fmt.Println(strings.Join(realstarting_items, " | "))
+			fmt.Println("Build:")
+			fmt.Println(strings.Join(realbuild, " | "))
+		}
+
 		// wait for champion select and checking if i should show build
 		for !inChampSelect() && !showBuild {
 			time.Sleep(time.Second) // cpu usage capper
@@ -97,28 +121,6 @@ func main() {
 
 			// setting value
 			showBuild = true
-		}
-
-		// showing build
-		if inGame() && showBuild {
-			// show this only one time
-			showBuild = false
-
-			// convert []int to []string that can be joined
-			var realstarting_items []string
-			for _, e := range starting_items {
-				realstarting_items = append(realstarting_items, items_id_map[strconv.Itoa(e)])
-			}
-			var realbuild []string
-			for _, e := range build {
-				realbuild = append(realbuild, items_id_map[strconv.Itoa(e)])
-			}
-
-			// print out build and starting items
-			fmt.Println("Starting items:")
-			fmt.Println(strings.Join(realstarting_items, " | "))
-			fmt.Println("Build:")
-			fmt.Println(strings.Join(realbuild, " | "))
 		}
 
 		time.Sleep(time.Second) // cpu usage capper
