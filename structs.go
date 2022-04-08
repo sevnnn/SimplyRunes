@@ -1,18 +1,5 @@
 package main
 
-type StaticData struct {
-	Data map[string]struct {
-		Key  string `json:"key"`
-		Name string `json:"name"`
-	} `json:"data"`
-}
-
-type StaticData2 struct {
-	Data map[string]struct {
-		Name string `json:"name"`
-	} `json:"data"`
-}
-
 type Gameflow struct {
 	Gamedata struct {
 		Queue struct {
@@ -61,6 +48,11 @@ type APIData struct {
 type RunePayload struct {
 	Name      string `json:"name"`
 	Primary   int    `json:"primaryStyleId"`
-	Runes     []int  `json:"selectedPerkIds"`
 	Secondary int    `json:"subStyleId"`
+	Runes     []int  `json:"selectedPerkIds"`
+}
+
+type Build struct {
+	Starting_items []string
+	Items          []string
 }

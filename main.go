@@ -1,177 +1,56 @@
 package main
 
 import (
-	"crypto/tls"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
 )
 
-type S struct {
-	Path     string `json:"LeaguePath"`
-	Infotype string `json:"InfoType"`
-}
-
-var Settings S
-var Localhost string
-var Auth string
-
-const VERSION string = "2.3"
-
 func main() {
-	// get latest data and version
-	patch, champ_id_map, spells_id_map, items_id_map, github_version := getData()
+	var champion_his string
+	var show_build bool
+	var build Build
 
-	// check if update is available
-	if github_version != VERSION {
-		fmt.Println("=============================================")
-		fmt.Println("New version is available, update here:")
-		fmt.Println("https://github.com/sevnnn/SimplyRunes")
-		fmt.Println("=============================================")
-		fmt.Println("")
-	}
+	fmt.Println("Waiting for champion select")
+	for {
+		champ, champ_sc := ApiGet("/lol-champ-select/v1/current-champion")
+		if string(champ) != "0" && champ_sc == 200 && string(champ) != champion_his && inChampSelect() {
+			champion_his = string(champ)
 
-	// im bad @ programming
-	showBuild := false
-	var build, starting_items []int
-
-	// load settings
-	txtsettings := loadSettings()
-	json.Unmarshal(txtsettings, &Settings)
-
-	// preaparing champion history
-	championhis := "0"
-
-	// cheking if league is open
-	fmt.Println("Waiting for League to run")
-	for !leagueOpened() {
-		time.Sleep(time.Second * 5) // cpu usage capper
-	}
-
-	// init lcu
-	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-	Localhost, Auth = initLCU()
-
-	// perma loop
-	fmt.Println("Waiting for champ select")
-
-	for leagueOpened() {
-
-		// showing build
-		if inGame() && showBuild {
-			// show this only one time
-			showBuild = false
-
-			// convert []int to []string that can be joined
-			var realstarting_items []string
-			for _, e := range starting_items {
-				realstarting_items = append(realstarting_items, items_id_map[strconv.Itoa(e)])
-			}
-			var realbuild []string
-			for _, e := range build {
-				realbuild = append(realbuild, items_id_map[strconv.Itoa(e)])
-			}
-
-			// print out build and starting items
-			fmt.Println("Starting items:")
-			fmt.Println(strings.Join(realstarting_items, " | "))
-			fmt.Println("Build:")
-			fmt.Println(strings.Join(realbuild, " | "))
+			build = setRunesGetBuild(string(champ))
+			show_build = true
 		}
 
-		// wait for champion select and checking if i should show build
-		for !inChampSelect() && !showBuild {
-			time.Sleep(time.Second) // cpu usage capper
+		if inGame() && show_build {
+			show_build = false
+
+			fmt.Printf("Starting items:\n%s\nFull Build:\n%s\n", strings.Join(build.Starting_items, " | "), strings.Join(build.Items, " | "))
 		}
 
-		// get champion
-		champion, _ := ApiGET("/lol-champ-select/v1/current-champion")
-		if string(champion) != championhis {
-			// setting new championhis
-			championhis = string(champion)
-
-			// getting runes and build
-			runes_primary, runes_secondary, runes, role, spells, bs, sis := getInfo(string(champion), patch, getQType())
-			build = bs
-			starting_items = sis
-
-			// setting runes
-			payload, err := json.Marshal(
-				RunePayload{
-					Primary:   runes_primary,
-					Secondary: runes_secondary,
-					Name:      champ_id_map[string(champion)],
-					Runes:     runes,
-				})
-			Check(err)
-
-			ApiDELETE("/lol-perks/v1/pages")
-			ApiPOST("/lol-perks/v1/pages", payload)
-
-			// printing status
-			fmt.Println("Runes set for", champ_id_map[string(champion)], role, "\tSummoner spells:", spells_id_map[spells[0]], spells_id_map[spells[1]])
-
-			// setting value
-			showBuild = true
-		}
-
-		time.Sleep(time.Second) // cpu usage capper
+		time.Sleep(time.Second)
 	}
 }
 
 func Check(e error) {
-	// error handler
 	if e != nil {
 		log.Fatalln(e)
 	}
 }
 
-func leagueOpened() bool {
-	// check if league is opened by cheking lockfile
-	_, err := ioutil.ReadFile(Settings.Path + "/lockfile")
-	if err != nil {
-		return false
-	} else {
-		return true
-	}
-}
-
-func loadSettings() []byte {
-	// returns []byte from settings.json
-	file, err := ioutil.ReadFile("./settings.json")
-	Check(err)
-
-	return file
-}
-
-func initLCU() (string, string) {
-	// returning localhost and auth
-	file, err := ioutil.ReadFile(Settings.Path + "/lockfile")
-	Check(err)
-
-	array := strings.Split(string(file), ":")
-
-	return array[4] + "://127.0.0.1:" + array[2], "Basic " + base64.StdEncoding.EncodeToString([]byte("riot:"+array[3]))
-}
-
 func inChampSelect() bool {
-	// checking if player is in champion select
-	data, _ := ApiGET("/lol-gameflow/v1/gameflow-phase")
-	if string(data) != "\"ChampSelect\"" {
-		return false
-	} else {
+	data, _ := ApiGet("/lol-gameflow/v1/gameflow-phase")
+	if string(data) == "\"ChampSelect\"" {
 		return true
+	} else {
+		return false
 	}
 }
 
 func inGame() bool {
-	data, _ := ApiGET("/lol-gameflow/v1/gameflow-phase")
+	data, _ := ApiGet("/lol-gameflow/v1/gameflow-phase")
 	if string(data) != "\"InProgress\"" {
 		return false
 	} else {
@@ -179,47 +58,9 @@ func inGame() bool {
 	}
 }
 
-func getData() (string, map[string]string, map[string]string, map[string]string, string) {
-	var patchlist []string
-	data, _ := Get("https://ddragon.leagueoflegends.com/api/versions.json")
-	json.Unmarshal(data, &patchlist)
-
-	var champ_id_name StaticData
-	var champ_id_map = make(map[string]string)
-	data, _ = Get("https://ddragon.leagueoflegends.com/cdn/" + patchlist[0] + "/data/en_US/champion.json")
-	json.Unmarshal(data, &champ_id_name)
-	for _, e := range champ_id_name.Data {
-		champ_id_map[e.Key] = e.Name
-		//champ_id_map[e.Name] = e.Name
-	}
-
-	var spell_id_name StaticData
-	var spell_id_map = make(map[string]string)
-	data, _ = Get("https://ddragon.leagueoflegends.com/cdn/" + patchlist[0] + "/data/en_US/summoner.json")
-	json.Unmarshal(data, &spell_id_name)
-	for _, e := range spell_id_name.Data {
-		spell_id_map[e.Key] = e.Name
-		//champ_id_map[e.Name] = e.Name
-	}
-
-	var item_id_name StaticData2
-	var item_id_map = make(map[string]string)
-	data, _ = Get("https://ddragon.leagueoflegends.com/cdn/" + patchlist[0] + "/data/en_US/item.json")
-	json.Unmarshal(data, &item_id_name)
-	//fmt.Println(item_id_map)
-	//fmt.Println(item_id_name)
-	for i, e := range item_id_name.Data {
-		item_id_map[i] = e.Name
-	}
-
-	data, _ = Get("https://raw.githubusercontent.com/sevnnn/SimplyRunes/main/version")
-
-	return patchlist[0], champ_id_map, spell_id_map, item_id_map, string(data)
-}
-
 func getQType() string {
 	var gameflow Gameflow
-	data, _ := ApiGET("/lol-gameflow/v1/session")
+	data, _ := ApiGet("/lol-gameflow/v1/session")
 	json.Unmarshal(data, &gameflow)
 	if gameflow.Gamedata.Queue.GameMode == "ARAM" {
 		return "450"
@@ -228,57 +69,57 @@ func getQType() string {
 	}
 }
 
-func getInfo(champ string, patch string, qtype string) (int, int, []int, string, []string, []int, []int) {
-	// this api might crash upon new patches, so if it 404's then use older patches
-	var data []byte
-	spatch := strings.Split(patch, ".")
-	for {
-		spatchj := strings.Join(spatch, ".")
-		datas, sc := Get("https://league-champion-aggregate.iesdev.com/api/champions/" + champ + "?patch=" + spatchj + "&queue=" + qtype + "&region=world&tier=PLATINUM_PLUS")
-		if sc == 200 {
-			data = datas
-			break
-		}
-		spatch = strings.Split(spatchj, ".")
-		val, err := strconv.Atoi(spatch[1])
-		Check(err)
-		val--
-		spatch[1] = strconv.Itoa(val)
+func setRunesGetBuild(champ string) Build {
+	data, sc := Get(fmt.Sprintf("https://league-champion-aggregate.iesdev.com/api/champions/%s?patch=%s&queue=%s&region=world&tier=PLATINUM_PLUS", champ, CurrentPatch, getQType()))
+	if sc != 200 {
+		data, _ = Get(fmt.Sprintf("https://league-champion-aggregate.iesdev.com/api/champions/%s?patch=%s&queue=%s&region=world&tier=PLATINUM_PLUS", champ, LastPatch, getQType()))
 	}
 
-	// unmarshal data into struct
 	var apidata APIData
 	json.Unmarshal(data, &apidata)
 
-	r := 0
+	pos := 0
 	role := "ARAM"
-	if qtype != "450" {
+	if getQType() != "450" {
 		maxgames := 0
-		// determining most popular role
+
 		for i, e := range apidata.Data {
 			if e.Stats.Games > maxgames {
 				maxgames = e.Stats.Games
-				r = i
+				pos = i
 			}
 		}
-		role = apidata.Data[r].Role
+		role = apidata.Data[pos].Role
 	}
 
-	if Settings.Infotype == "winrate" {
-		p := apidata.Data[r].Stats.WR_Runes.Build[0]
-		s := apidata.Data[r].Stats.WR_Runes.Build[5]
-		rs := []int{apidata.Data[r].Stats.WR_Runes.Build[1], apidata.Data[r].Stats.WR_Runes.Build[2], apidata.Data[r].Stats.WR_Runes.Build[3], apidata.Data[r].Stats.WR_Runes.Build[4], apidata.Data[r].Stats.WR_Runes.Build[6], apidata.Data[r].Stats.WR_Runes.Build[7], apidata.Data[r].Stats.WR_Shards.Build[0], apidata.Data[r].Stats.WR_Shards.Build[1], apidata.Data[r].Stats.WR_Shards.Build[2]}
-		spells := apidata.Data[r].Stats.Spells.Build
-		b := apidata.Data[r].Stats.WR_Build.Build
-		si := apidata.Data[r].Stats.WR_Starting_items.Build
-		return p, s, rs, role, []string{strconv.Itoa(spells[0]), strconv.Itoa(spells[1])}, b, si
-	} else {
-		p := apidata.Data[r].Stats.Runes.Build[0]
-		s := apidata.Data[r].Stats.Runes.Build[5]
-		rs := []int{apidata.Data[r].Stats.Runes.Build[1], apidata.Data[r].Stats.Runes.Build[2], apidata.Data[r].Stats.Runes.Build[3], apidata.Data[r].Stats.Runes.Build[4], apidata.Data[r].Stats.Runes.Build[6], apidata.Data[r].Stats.Runes.Build[7], apidata.Data[r].Stats.Shards.Build[0], apidata.Data[r].Stats.Shards.Build[1], apidata.Data[r].Stats.Shards.Build[2]}
-		b := apidata.Data[r].Stats.Build.Build
-		spells := apidata.Data[r].Stats.Spells.Build
-		si := apidata.Data[r].Stats.Starting_items.Build
-		return p, s, rs, role, []string{strconv.Itoa(spells[0]), strconv.Itoa(spells[1])}, b, si
+	// shortcut
+	short := apidata.Data[pos].Stats
+
+	payload, err := json.Marshal(RunePayload{
+		Name:      fmt.Sprintf("%s - %s", Champs[champ], role),
+		Primary:   short.Runes.Build[0],
+		Secondary: short.Runes.Build[5],
+		Runes:     []int{short.Runes.Build[1], short.Runes.Build[2], short.Runes.Build[3], short.Runes.Build[4], short.Runes.Build[6], short.Runes.Build[7], short.Shards.Build[0], short.Shards.Build[1], short.Shards.Build[2]},
+	})
+	Check(err)
+
+	ApiDELETE("/lol-perks/v1/pages")
+	ApiPOST("/lol-perks/v1/pages", payload)
+
+	fmt.Printf("\nRunes set for %s (%s)\nSummoner spells: %s %s\n\n", Champs[champ], role, Summs[strconv.Itoa(short.Spells.Build[0])], Summs[strconv.Itoa(short.Spells.Build[1])])
+
+	var starting_items_string []string
+	for _, e := range apidata.Data[pos].Stats.Starting_items.Build {
+		starting_items_string = append(starting_items_string, Items[strconv.Itoa(e)])
+	}
+
+	var items_string []string
+	for _, e := range apidata.Data[pos].Stats.Build.Build {
+		items_string = append(items_string, Items[strconv.Itoa(e)])
+	}
+
+	return Build{
+		Starting_items: starting_items_string,
+		Items:          items_string,
 	}
 }

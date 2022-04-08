@@ -1,0 +1,1 @@
+LeaguePath - set it to your installation folder of league (ex. "C:/Riot Games/League Of Legends")
